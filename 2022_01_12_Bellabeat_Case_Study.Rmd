@@ -1,0 +1,231 @@
+---
+title: "Bellabeat Case Study"
+author: "Montgomery Simes"
+date: "2022/01/12"
+output:
+  html_document:
+    df_print: paged
+---
+
+![Bellabeat Fitness App](https://www.stableton.com/wp-content/webp-express/webp-images/uploads/2021/05/Bellabeat-Blog-Picture1-768x388.png.webp)
+
+
+
+## Background 
+
+[Bellabeat](https://bellabeat.com/about/) is a "go-to wellness brand for women with an ecosystem of products and services focused on women’s health". 
+
+Since 2013 the company has been developing products and services which allow women to gain insights into their personal health habits. These products and services include:
+
+* Bellabeat app  
+  + Provides users with access to health data related to activity, sleep, stress, menstrual cycle and mindfullness habits  
+* Leaf  
+  + A wellness tracker which connects to the Bellabeat app  
+* Time  
+  + A wellness tracker watch  
+* Spring  
+  + A water bottle which tracks and reports users hydration habits, connects to the Bellabeat app  
+* Bellabeat membership  
+  + Subscription based membership program that provides users with personalised health, nutrition, beauty and mindfullness advice based on personal lifestyle and goals  
+
+The company products are distributed by a network of online retailers and also through the Bellabeat [website](https://bellabeat.com/catalog/).
+
+Bellabeat's marketing strategy focuses on digital marketing including:
+
+* Maintaining social media pages (Faceboook, Instagram, Twitter)
+* Present ads on the Google display Network
+* Present ads on Youtube
+
+## Business Task  
+
+This project will focus on the analysis of non-Bellabeat smart device data to identify trends and gain insights into how consumers are using health and fitness tracking devices. 
+
+Questions to be answered by the analysis:
+
+1. What are some trends in smart device usage?
+2. How could these trends apply to Bellabeat customers?
+3. How could these trends help influence Bellabeat marketing strategy?
+
+## Libraries used for analysis 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(skimr)
+library(lubridate)
+library(ggplot2)
+```
+
+
+## Import Datasets 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+daily_activity <- read.csv("Fitabase Data 4.12.16-5.12.16/dailyActivity_merged.csv")
+heart_rate <- read.csv("Fitabase Data 4.12.16-5.12.16/heartrate_seconds_merged.csv")
+sleep <- read.csv("Fitabase Data 4.12.16-5.12.16/sleepDay_merged.csv")
+weight <- read.csv("Fitabase Data 4.12.16-5.12.16/weightLogInfo_merged.csv")
+```
+
+## Clean and Join Datasets 
+
+The following code creates the base dataframe from which the analysis is run. The code:
+
+* Renames columns  
+* Separates the Date/Time column into separate "Date" and "Time" columns  
+* Calculates the daily min, max and average heart rate per user  
+* Converts the date into Y/M/D format  
+* Joins the four tables into a single dataframe
+* Replace Id numbers with random names 
+* Identify and drop duplicated rows  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Select relevant columns and rename from daily activity data
+daily_activity <- daily_activity %>%  
+  select(Id, ActivityDate, TotalSteps, VeryActiveMinutes, FairlyActiveMinutes, LightlyActiveMinutes, SedentaryMinutes, Calories) %>% 
+  rename(Date=ActivityDate, Total_Steps=TotalSteps, Very_Active_Minutes=VeryActiveMinutes, Fairly_Active_Minutes=FairlyActiveMinutes, Lightly_Active_Minutes=LightlyActiveMinutes, Sedentary_Minutes=SedentaryMinutes)
+
+#Select relevant columns, split time and date and calculate min, max and avg heart rates
+heart_rate <- heart_rate %>% 
+  separate(Time, c("Date", "Time"), sep=" ", extra="merge") %>% 
+  select(Id, Date, Value) %>% 
+  group_by(Id,Date) %>% 
+  summarise(avg_HR=mean(Value), max_HR=max(Value), min_HR=min(Value))
+
+#Select relevant columns and rename,split time and date
+sleep <- sleep %>%  
+  separate(SleepDay, c("Date", "Time"), sep=" ", extra="merge") %>% 
+  select(Id, Date, TotalMinutesAsleep, TotalTimeInBed) %>% 
+  rename(Total_Minutes_Asleep=TotalMinutesAsleep, Total_Time_In_Bed=TotalTimeInBed)
+
+#Select relevant columns and rename,split time and date
+weight <- weight %>%  
+  separate(Date, c("Date", "Time"), sep=" ", extra="merge") %>% 
+  select(Id, Date, WeightKg, BMI) %>% 
+  rename(Weight_Kg=WeightKg)
+
+#merge all data frames 
+fitness_data <- Reduce(function(dtf1,dtf2) merge(dtf1,dtf2, by = c("Id","Date"), all=T), list(daily_activity,heart_rate,sleep,weight))
+
+#change date format and data type
+fitness_data <- fitness_data %>% 
+  mutate(Date=mdy(Date))
+
+#Assigning random names to user Id
+Name <- c("Olivia", "Emma", "Ava", "Charlotte", "Sophia", "Amelia", "Isabella", "Mia", "Evelyn", "Harper", "Camila", "Gianna", "Abigail", "Luna", "Ella", "Elizabeth", "Sofia", "Emily", "Avery", "Mila", "Scarlett", "Eleanor", "Madison", "Layla", "Penelope", "Aria", "Chloe", "Grace", "Ellie", "Nora", "Hazel", "Zoey", "Riley")
+
+Id <- unique(fitness_data$Id)
+
+names_df <- data.frame(Id,Name)
+
+fitness_data <- merge(fitness_data,names_df, by = "Id", all=T)
+
+fitness_data <- fitness_data[, c(16,2:15)]
+
+#Drop duplicate rows
+fitness_data <- distinct(fitness_data)
+
+head(fitness_data)
+```
+
+## Exploring the Data and Identifying Trends 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+skim_without_charts(fitness_data)
+```
+### Key Observations
+
+* There were 33 unique users. The small sample size should be considered when interpreting results.  
+* The data was collected over 31 days from 2016-04-12 to 2016-05-12.  
+* The average number of steps taken was 7638, which is less then the optimal 8-10k recommended by [health sources](https://www.nih.gov/news-events/nih-research-matters/number-steps-day-more-important-step-intensity). The standard deviation for steps taken is relatively large possibly indicating inconsistency in steps taken by day or between users.  
+* The average number of very and fairly active minutes is 21.2 and 13.6 per day respectively. This would indicate that a number of users are achieving the [recommended physical activity](https://www.who.int/news-room/fact-sheets/detail/physical-activity). The standard deviation for these measurements is large indicating a significant spread between days and/or users.  
+* The average number of calories burnt is 2304. If users follow the [recommended daily calorie intake of 2000](https://www.nhs.uk/common-health-questions/food-and-diet/what-should-my-daily-intake-of-calories-be/#:~:text=An%20ideal%20daily%20intake%20of,women%20and%202%2C500%20for%20men.) then a number of users are running on  a calorie deficit.
+* The average minutes asleep of 419 is slightly less than the [recommended](https://www.healthline.com/health/healthy-sleep/how-long-does-it-take-to-fall-asleep#cant-fall-asleep) 420 to 480.
+
+A number of missing values were noted for the collection of heart rate, sleep and weight data. Upon further investigation it was found that a  number of users did not keep record of this data. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#calculates the ratio of the days which a user records heart rate, sleep or weight data 
+record_percentage <- fitness_data %>% 
+  group_by(Name) %>% 
+  select(avg_HR, Total_Minutes_Asleep, Weight_Kg) %>% 
+  summarise_all(funs(sum(is.na(.)))) %>% 
+  mutate(HR = round((31.0-avg_HR)/31,2), Sleep = round((31.0-Total_Minutes_Asleep)/31,2), Weight = round((31.0-Weight_Kg)/31,2)) %>% 
+  select(Name, HR, Sleep, Weight)
+
+head(record_percentage)
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+message(cat("Number of individuals that monitored heart rate: ",sum(record_percentage$HR != 0), " of 33"))
+
+message(cat("Number of individuals that monitored sleep: ", sum(record_percentage$Sleep != 0), " of 33"))
+
+message(cat("Number of individuals that monitored weight: ", sum(record_percentage$Weight != 0), " of 33"))
+```
+
+Of the users that did keep record of heart rate, sleep and weight data, it was found that these measurements were not recorded consistently. 
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+#Frequency table of the ratio of days users recorded heart rate, sleep or weight data
+br <- seq(0,1, by = 0.25)
+ranges <- paste(head(br,-1), br[-1], sep = " - ")
+HR_freq = hist(subset(record_percentage, HR >0)$HR,breaks=br, include.lowest=TRUE, plot=FALSE)
+Sleep_freq = hist(subset(record_percentage, Sleep >0)$Sleep,breaks=br, include.lowest=TRUE, plot=FALSE)
+Weight_freq = hist(subset(record_percentage, Weight >0)$Weight,breaks=br, include.lowest=TRUE, plot=FALSE)
+data.frame(ratio_of_days_recorded = ranges, HR = HR_freq$counts, Sleep = Sleep_freq$counts, Weight = Weight_freq$counts)
+```
+
+It was noted that heart rate was recorded less then 75% of the days by 9 of the 20 users that monitored heart rate.
+Hours slept was recorded less then 75% of the days by 15 of the 28 users that monitored sleep. Of the 19 users which recorded weight 13 collected the data less then 25% of the days.
+
+### Data Visualisation
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(subset(fitness_data,Total_Steps >0), aes(Total_Steps))+geom_histogram(binwidth = 1000, fill = "dark blue") + labs(title="Total Daily Steps", x="Steps", y="Count")
+```
+The histogram of the total daily steps shows a slight right skew. While the average number of steps is 7638, the spread is large with a significant number of users taking less than the recommended 8-10k steps per day.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(subset(fitness_data, Very_Active_Minutes >= 0), aes(Very_Active_Minutes))+geom_histogram( fill = "dark blue") + labs(title="Daily Very Active Minutes", x="Very Active Minutes", y="Count")
+```
+The histogram of very active minutes shows a right skew. While the average is 21.2 minutes a large number of users are recording 0 very active minutes. 
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(fitness_data, aes(x=Total_Minutes_Asleep, y=Total_Time_In_Bed, color=Name)) + 
+  geom_point() + labs(title="Total Minutes Asleep vs. Total Minutes in Bed", x="Minutes Asleep", y="Minutes in Bed") + theme(legend.position = "none") + annotate("segment", x = 200, xend = 250, y = 625, yend = 500, colour = "#00C1A7", size=1, arrow=arrow()) + annotate("text", x=200, y=650, label = "Gianna", colour = "#00C1A7" )
+```
+A linear relationship can be observed between time spent in bed and time asleep. The plot shows a group of sleep observations from Gianna, that deviates from the sleep patterns of other users. Overall it looks like she spends more time in bed not asleep and less time sleeping then other users. This would suggest that Gianna may require help with sleep.  
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data=fitness_data, aes(x=Total_Minutes_Asleep, y=Sedentary_Minutes)) + geom_point() + geom_smooth() + labs(title="Minutes Asleep vs. Sedentary Minutes") + labs(x="Minutes Asleep", y="Sedentary Minutes")
+```
+A negative correlation could possibly exist between minutes asleep and sedentary minutes. This would suggest that those who are more active during the day sleep better at night. 
+
+## Summary of Trends and Business Recomendations
+
+### Summary of key trends 
+
+* The number of daily steps taken is below what is recommended for a significant number of users
+* The spread of participation in very active exercise is large with a significant number of users not participating in enough high intensity exercise
+* Heart rate, sleep and weight data was recorded by only some of the users and those that did, did not do so consistently. Weight in particular was not monitored consistently. 
+* Analysis of the minutes asleep v. minutes in bed data can be used to identify individuals who may be struggling with sleep
+* A negative relationship was discovered between sedentary minutes and sleep indicating those who where less active did not sleep as well as those who where more active. 
+
+### Business Recomendations 
+
+#### Product recomendations 
+
+* Build an alert feature within the app to encourage users to meet the recommended daily step goal of between 8-10k steps  
+* Create a virtual group exercise meet-up feature on the app or website which allow users to create and join online exercise groups. The aim is to encourage users to draw motivation from the Bellabeat community to increase physical activity levels among users. 
+* Look into the development of "smart scales" which will sync with the app allowing users to easily monitor and track their weight.  
+* Develop a "smart sleep" add-on to the app which can identify individuals who are struggling to sleep. The app will then provide push notifications that will provide helpful hints to assist with sleep i.e. sleep cycle alarm.  
+* Develop push notifications which encourage users to become more active once a sedentary minutes threshold is met.  
+
+#### Marketing recomendations
+
+* Promote social media posts and create blog articles that inform users of the benefits of meeting the recommended daily step count. Emphasize the ease of Bellabeat's products in measuring and recording daily step counts and managing step goals via the app.  
+* Promote meet-up groups on social media and websites, and create informative content which explains the need and benifits of high intensity exercise.  
+* Develop a marketing campaign to promote "smart scales" product.  
+* Develop a marketing campaign to promote the "smart sleep" add-on with emphasis on the health befits of 7-8 hours of sleep per night.  
+* Promote content which give simple hints on how to be more active during the day.  
